@@ -36,10 +36,8 @@ one_long_text <- paste(clean_idented_text, collapse = " ")
 #words quite well, but trips up add " I " and " I'm ", "I've "
 #str_view_all(one_long_text, "[A-Z]{3,}(\\s*[A-Z]?[a-z]+\\W*)+") 
 
-#works well
-#str_view_all(one_long_text, "[A-Z]{3,}(\\s*\\W*[A-Z]?\\W*[a-z]+\\W*\\d*)+")  
-
-str_extract_all(one_long_text, "[A-Z]{3,}(\\s*\\W*[A-Z]?\\W*[a-z]+\\W*\\d*)+")  
+clean_script <- str_extract_all(one_long_text, "[A-Z]{3,}(\\s*\\W*[A-Z]?\\W*[a-z]+\\W*\\d*)+")  
+clean_script <- unlist(clean_script)
 
 
 
