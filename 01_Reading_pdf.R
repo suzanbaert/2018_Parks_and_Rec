@@ -40,5 +40,5 @@ clean_script <- str_extract_all(one_long_text, "[A-Z]{3,}(\\s*\\W*[A-Z]?\\W*[a-z
 clean_script <- unlist(clean_script)
 
 
-
+saveRDS(clean_script, "data/clean_script.RDS")
  
