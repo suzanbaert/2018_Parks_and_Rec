@@ -40,5 +40,14 @@ clean_script <- str_extract_all(one_long_text, "[A-Z]{3,}(\\s*\\W*[A-Z]?\\W*[a-z
 clean_script <- unlist(clean_script)
 
 
-saveRDS(clean_script, "data/clean_script.RDS")
+#making a dataframe
+script_split <- str_split(clean_script, pattern = " ", n=2)
+script_split_t <- purrr::transpose(script_split)
+
+script_S03E07 <- tibble(episode = "S03E07 Harvest Festival",
+                        speaker = unlist(script_split_t[[1]]),
+                        text = unlist(script_split_t[[2]]))
+
+
+saveRDS(script_S03E07, "data/script_S03E07")
  
