@@ -1,15 +1,16 @@
 ---
 title: "Happy Galentine's Day!"
-output: html_document
+output: md_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 ```
 
-Sometimes you dream big, but you don't have the data...  
+Sometimes you dream big, but you just don't have the data...  
 I had this plan for text analysis by character from the Parks & Recreation series to celebrate Galantine's Day but getting the data was a struggle. Subtitles are available for pretty much every episode but those don't contain data about the character who said the lines. I needed scripts, which are a bit harder to come by. I found 6 scripts of episodes scattered on the web from the first 3 seasons in pdf format that were usable.  
-With no time to add characters to subtitles or dig even further, let's just use what we've got.  
+That's not even covering 5% of the series episodes, but let's use what we've got!
+  
 
 But first, what is Galantine's day I hear you ask?
 https://media.giphy.com/media/l3q2tpNX0icJxe87K/giphy.gif
@@ -17,13 +18,13 @@ https://media.giphy.com/media/l3q2tpNX0icJxe87K/giphy.gif
 Seriously? It's only like the best day ever!
 https://media.giphy.com/media/qjXuMQ4TTaDSg/giphy.gif
 
-On Friday February 13th, the day before Valentine, Leslie Knope from the Pawnee Parks department celebrates Galentine's day with her... gals. Unfortunately this is not one of the script's I found...
+On Friday February 13th, the day before Valentine, Leslie Knope from the Pawnee Parks department celebrates Galentine's day with her... gals. 
 
 
 ## Extracting the data from pdf
 
 
-```{r}
+```{r library_loading}
 library(pdftools)
 library(stringr)
 library(dplyr)
@@ -38,15 +39,16 @@ pdf_script <- pdf_script[3:34]
 <br>
 
 
-As per usual, getting the data in good shape took quite a bit of effort and needed playing with regex, but as this won't be very interesting, I will quickly glance past it.  
+As per usual, getting the data in good shape took quite a bit of effort and regex-playtime, but as this won't be very interesting, I will quickly glance past it.  
 
 I needed to extract pdf's 6 times, so I did the first one manually and then turned this into a function:
 The function does a few things in a row:
-- It removes the recurring text on top of the pdfs which contains the episode information
-- It extracts only the indented text which is where the actual lines are. Everything else is descriptions of characters/scenes.
-- It removes some other text like "ACT ONE", "END OF SHOW". It also removes anything between brackets which was often to indicate a character's reaction like "(shouting)". 
-- After moving it into one long vector, I could split the text into lines by character. This was possible because the character's name was all in uppercase and no other text was.
-- And finally moves everything in a dataframe
+
+* It removes the recurring text on top of the pdfs which contains the episode information
+* It extracts only the indented text which is where the actual lines are. Everything else is descriptions of characters/scenes.
+* It removes some other text like "ACT ONE", "END OF SHOW". It also removes anything between brackets which was often to indicate a character's reaction like "(shouting)". 
+* After moving it into one long vector, I could split the text into lines by character. This was possible because the character's name was all in uppercase and no other text was.
+* And finally moves everything in a dataframe
 
 ```{r clean_script_function}
 clean_pr_script <- function(pdf_script, episodeinfo){
@@ -89,8 +91,8 @@ clean_pr_script <- function(pdf_script, episodeinfo){
 <br>
 
 Time to get all of the episode info out:
-Given that the number of pages, and especially the number of intropages varied, I did not do this as part of the function but manually upfront.
-```{r extracting_pdf}
+Given that the number of pages, and especially the number of intro-pages varied, I did not do this as part of the function but manually upfront.
+```{r extracting_pdf,  eval=FALSE}
 
 pdf_3x07 <- pdf_text("data/parks-and-recreation-3x07-harvest-festival-2011.pdf")
 pdf_3x07 <- pdf_3x07[3:36]
@@ -123,17 +125,34 @@ script <- bind_rows(script_1x02, script_2x02, script_2x04, script_2x07,
                     script_3x05, script_3x07)
 script
 ```
+ 
+Doing all that will give a dataframe of 1840 lines split by character:
+```{r ref.label ='extracting_pdf', echo=FALSE}
+```
+ 
+ 
  <br>
  
- ## Text analysis
+## Featured episodes
  
- I've been avidly reading Julia Silge's blog posts on text analysis and I noticed her using two functions from a personal package by  David Robinson that are pretty nifty when you want to make ordered faceted plots with words that appear multiple times.
+I've been avidly reading Julia Silge's blog posts on text analysis and I noticed her using two functions from a personal package by David Robinson that are pretty nifty when you want to make ordered faceted plots with words that appear multiple times.  
+I did not load the entire package, but just copied those two functions to use in here:
  
  
-```{r}
+```{r text_loading}
 library(tidytext)
 library(ggplot2)
-library(drlib)
+
+#functions from David Robinson
+reorder_within <- function(x, by, within, fun = mean, sep = "___", ...) {
+  new_x <- paste(x, within, sep = sep)
+  stats::reorder(new_x, by, FUN = fun)
+}
+
+scale_x_reordered <- function(..., sep = "___") {
+  reg <- paste0(sep, ".+$")
+  ggplot2::scale_x_discrete(labels = function(x) gsub(reg, "", x), ...)
+}
 ```
 
 
@@ -150,37 +169,40 @@ script %>%
   mutate(word = reorder_within(word, tf_idf, episode)) %>% 
   ggplot(aes(word, tf_idf, fill = episode)) +
   geom_col(alpha = 0.8, show.legend = FALSE) +
-  facet_wrap(~ episode, scales = "free_y", ncol = 3) +
+  facet_wrap(~ episode, scales = "free_y", nrow = 2) +
   scale_x_reordered() +
   coord_flip()
 
 ```
 <br>
 
-But what I really wanted to play with is characters - who says what a lot in comparison to others?  
+## Text analysis for the main characters
+
+I wasn't really interested in episode descriptions, but in the characters - who says what a lot in comparison to others?  
 The `td_idf` scores show some nice things: Leslie obviously is the most community orientied with words like: *festival, forum, our, community, Pawnee and park*, but also arch nemisis *Greg Pikitis* features.  
-In the early seasons Ben still gets a lot of explaining to for when he became mayor at 18 and building *Ice Town*. 
+In the early seasons Ben still gets a lot of explaining to for when he became *mayor at 18* and building *Ice Town*.  
+But although not entirely readable, Andy's set of words is a true star for me - what a set of random words: *sugar rush, rock, walrus, vegetables*?
 
 ```{r}
 script %>%
+  filter(speaker %in% c("LESLIE", "TOM", "ANN", "RON", "APRIL", "BEN", "ANDY")) %>%
   unnest_tokens(word, text) %>% 
-  count(episode, word, sort=TRUE) %>% 
-  bind_tf_idf(word, episode, n) %>% 
-  group_by(episode) %>% 
+  count(speaker, word, sort=TRUE) %>% 
+  bind_tf_idf(word, speaker, n) %>% 
+  group_by(speaker) %>% 
   top_n(10) %>% 
   ungroup() %>% 
-  mutate(word = reorder_within(word, tf_idf, episode)) %>% 
-  ggplot(aes(word, tf_idf, fill = episode)) +
+  mutate(word = reorder_within(word, tf_idf, speaker)) %>% 
+  ggplot(aes(word, tf_idf, fill = speaker)) +
   geom_col(alpha = 0.8, show.legend = FALSE) +
-  facet_wrap(~ episode, scales = "free_y", ncol = 3) +
+  facet_wrap(~ speaker, scales = "free", nrow = 2) +
   scale_x_reordered() +
   coord_flip()
-
 ```
 <br>
 
 What about sentiments? Who is the most positive person in the bunch?  
-You'll love this one, because by a long long mile, the winner is...
+You'll love this one, because by a long,  long mile, the winner is...
 https://media.giphy.com/media/1HigJa2vahd4s/giphy.gif
 https://media.giphy.com/media/j7aXTwkeq4mg8/giphy.gif
 
@@ -198,8 +220,40 @@ ratio_posneg <- script %>%
 ggplot(ratio_posneg, aes(x= ratio, y=speaker)) +
   geom_point(size = 3, col = "cadetblue4") +
   labs(title = "Characters according to their positive/negative words ratio",
-       xlab = "Ratio positive to negative words using Bing lexicon",
-       ylab = "Character")
+       x = "Ratio positive to negative words using Bing lexicon",
+       y = "Character")
 
 ```
 
+<br>
+
+# Leslie-Knope-style compliments
+
+There was so much more I wanted to do, but the data was really limited. Strangely enough,  none of these episodes even contained a Leslie-Knope-style compliment to Ann!  
+Here are all Leslie's lines featuring the word 'Ann'. 
+```{r}
+script %>%
+  filter(speaker == "LESLIE") %>% 
+  filter(str_detect(text, pattern = "Ann")) %>% 
+  pull(text)
+```
+<br>
+
+"Ann is great", "Ann is awesome" - yes, those are compliments, but this is not what Leslie is known for!  
+  
+So I will leave you with a few quotes I got from [this website](http://www.vulture.com/2015/02/leslie-knope-ann-perkins-compliments.html)
+
+“Ann, you beautiful tropical fish.”
+
+"Oh, Ann, you beautiful, rule-breaking moth."
+
+“Ann, you are such a good friend, you’re a beautiful, talented, brilliant, powerful musk-ox. Thank you, ox.”
+
+“Ann, you cunning, pliable, chestnut-haired sunfish.”
+
+“Oh, Ann. You beautiful, naïve, sophisticated newborn baby.”
+
+“Ann, you poetic, noble land-mermaid.”
+
+
+# Happy Galentine's Day, gals! 
