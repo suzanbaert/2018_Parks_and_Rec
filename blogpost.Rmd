@@ -1,0 +1,205 @@
+---
+title: "Happy Galentine's Day!"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+Sometimes you dream big, but you don't have the data...  
+I had this plan for text analysis by character from the Parks & Recreation series to celebrate Galantine's Day but getting the data was a struggle. Subtitles are available for pretty much every episode but those don't contain data about the character who said the lines. I needed scripts, which are a bit harder to come by. I found 6 scripts of episodes scattered on the web from the first 3 seasons in pdf format that were usable.  
+With no time to add characters to subtitles or dig even further, let's just use what we've got.  
+
+But first, what is Galantine's day I hear you ask?
+https://media.giphy.com/media/l3q2tpNX0icJxe87K/giphy.gif
+
+Seriously? It's only like the best day ever!
+https://media.giphy.com/media/qjXuMQ4TTaDSg/giphy.gif
+
+On Friday February 13th, the day before Valentine, Leslie Knope from the Pawnee Parks department celebrates Galentine's day with her... gals. Unfortunately this is not one of the script's I found...
+
+
+## Extracting the data from pdf
+
+
+```{r}
+library(pdftools)
+library(stringr)
+library(dplyr)
+library(tidyr)
+
+#getting the data from pdf
+pdf_script <- pdf_text("data/parks-and-recreation-3x07-harvest-festival-2011.pdf")
+
+#remove the first two pages that are cover sheets
+pdf_script <- pdf_script[3:34]
+```
+<br>
+
+
+As per usual, getting the data in good shape took quite a bit of effort and needed playing with regex, but as this won't be very interesting, I will quickly glance past it.  
+
+I needed to extract pdf's 6 times, so I did the first one manually and then turned this into a function:
+The function does a few things in a row:
+- It removes the recurring text on top of the pdfs which contains the episode information
+- It extracts only the indented text which is where the actual lines are. Everything else is descriptions of characters/scenes.
+- It removes some other text like "ACT ONE", "END OF SHOW". It also removes anything between brackets which was often to indicate a character's reaction like "(shouting)". 
+- After moving it into one long vector, I could split the text into lines by character. This was possible because the character's name was all in uppercase and no other text was.
+- And finally moves everything in a dataframe
+
+```{r clean_script_function}
+clean_pr_script <- function(pdf_script, episodeinfo){
+  
+  indented_text <- pdf_script %>%
+    #removing the first lines on every page that are just title text
+    str_replace("PARKS.+\\\r\\n.+10", "") %>% 
+    #extracting on the indented text
+    str_extract_all(pattern = "\r\n\\s{5,}.+") %>%
+    unlist()
+
+  
+  clean_indented_text <- indented_text %>%
+    str_replace("(END OF )?COLD OPEN", "") %>%  
+    str_replace("(END OF )?ACT [A-Z]+", "") %>%  
+    str_replace("TAG", "") %>%
+    str_replace("END OF SHOW", "") %>%  
+    str_replace("\\(.+\\)", "") %>%  #removes anything between brackets
+    str_replace("\r\n\\s+", "")  #removes the new line and extra spaces 
+  
+  #pasting into one long text
+  one_long_text <- paste(clean_indented_text, collapse = " ")
+  
+  #splitting by speaker
+  clean_script <- str_extract_all(one_long_text, "[A-Z]{3,}(\\s*\\W*[A-Z]?\\W*[a-z]+\\W*\\d*)+")  
+  clean_script <- unlist(clean_script)
+  
+  
+  #making a dataframe
+  script_split <- str_split(clean_script, pattern = " ", n=2)
+  script_split_t <- purrr::transpose(script_split)
+  
+  output <- tibble(episode = episodeinfo,
+         speaker = unlist(script_split_t[[1]]),
+         text = unlist(script_split_t[[2]]))
+  
+  mutate_all(output, str_trim)
+}
+```
+<br>
+
+Time to get all of the episode info out:
+Given that the number of pages, and especially the number of intropages varied, I did not do this as part of the function but manually upfront.
+```{r extracting_pdf}
+
+pdf_3x07 <- pdf_text("data/parks-and-recreation-3x07-harvest-festival-2011.pdf")
+pdf_3x07 <- pdf_3x07[3:36]
+script_3x07 <- clean_pr_script(pdf_3x07, "3x07 Harvest Festival")
+
+pdf_3x05 <- pdf_text("data/parks-and-recreation-3x05-media-blitz-2011.pdf")
+pdf_3x05 <- pdf_3x05[3:36] 
+script_3x05 <- clean_pr_script(pdf_3x05, "3x05 Media Blitz")
+
+pdf_2x07 <- pdf_text("data/Parks_and_Recreation_2x07.pdf")
+pdf_2x07 <- pdf_2x07[3:41] 
+script_2x07 <- clean_pr_script(pdf_2x07, "2x07 Greg Pikitis")
+script_2x07 <- script_2x07[2:308,]
+script_2x07$text <- str_replace(script_2x07$text, "take one.\\s+", "")
+
+pdf_1x02 <- pdf_text("data/parks-and-recreation-1x02-canvassing-2009.pdf")
+pdf_1x02 <- pdf_1x02[2:38] 
+script_1x02 <- clean_pr_script(pdf_1x02, "1x02 Canvassing")
+
+pdf_2x02 <- pdf_text("data/parks-and-recreation-2x02-the-stakeout-2009.pdf")
+pdf_2x02 <- pdf_2x02[5:45] 
+script_2x02 <- clean_pr_script(pdf_2x02, "2x02 The Stakeout")
+
+pdf_2x04 <- pdf_text("data/parks-and-recreation-2x04-practice-date-2009.pdf")
+pdf_2x04 <- pdf_2x04[3:36] 
+script_2x04 <- clean_pr_script(pdf_2x04, "2x04 The Practice Date")
+
+#binding them all together:
+script <- bind_rows(script_1x02, script_2x02, script_2x04, script_2x07,
+                    script_3x05, script_3x07)
+script
+```
+ <br>
+ 
+ ## Text analysis
+ 
+ I've been avidly reading Julia Silge's blog posts on text analysis and I noticed her using two functions from a personal package by  David Robinson that are pretty nifty when you want to make ordered faceted plots with words that appear multiple times.
+ 
+ 
+```{r}
+library(tidytext)
+library(ggplot2)
+library(drlib)
+```
+
+
+Just a reminder for those who know Parks & Recreation: which episodes are in and what are they about? Here are the top words by episode - in many cases these really are enough to remember what the episode is about. 
+
+```{r}
+script %>%
+  unnest_tokens(word, text) %>% 
+  count(episode, word, sort=TRUE) %>% 
+  bind_tf_idf(word, episode, n) %>% 
+  group_by(episode) %>% 
+  top_n(10) %>% 
+  ungroup() %>% 
+  mutate(word = reorder_within(word, tf_idf, episode)) %>% 
+  ggplot(aes(word, tf_idf, fill = episode)) +
+  geom_col(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~ episode, scales = "free_y", ncol = 3) +
+  scale_x_reordered() +
+  coord_flip()
+
+```
+<br>
+
+But what I really wanted to play with is characters - who says what a lot in comparison to others?  
+The `td_idf` scores show some nice things: Leslie obviously is the most community orientied with words like: *festival, forum, our, community, Pawnee and park*, but also arch nemisis *Greg Pikitis* features.  
+In the early seasons Ben still gets a lot of explaining to for when he became mayor at 18 and building *Ice Town*. 
+
+```{r}
+script %>%
+  unnest_tokens(word, text) %>% 
+  count(episode, word, sort=TRUE) %>% 
+  bind_tf_idf(word, episode, n) %>% 
+  group_by(episode) %>% 
+  top_n(10) %>% 
+  ungroup() %>% 
+  mutate(word = reorder_within(word, tf_idf, episode)) %>% 
+  ggplot(aes(word, tf_idf, fill = episode)) +
+  geom_col(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~ episode, scales = "free_y", ncol = 3) +
+  scale_x_reordered() +
+  coord_flip()
+
+```
+<br>
+
+What about sentiments? Who is the most positive person in the bunch?  
+You'll love this one, because by a long long mile, the winner is...
+https://media.giphy.com/media/1HigJa2vahd4s/giphy.gif
+https://media.giphy.com/media/j7aXTwkeq4mg8/giphy.gif
+
+
+```{r}
+ratio_posneg <- script %>%
+  unnest_tokens(word, text) %>% 
+  inner_join(get_sentiments("bing"), by="word") %>% 
+  count(speaker, sentiment, sort=TRUE) %>% 
+  spread(sentiment, n) %>% 
+  mutate(total = positive + negative, ratio = positive/negative) %>% 
+  filter(total > 12, speaker != "GREG") %>% 
+  mutate(speaker = reorder(speaker, ratio))
+
+ggplot(ratio_posneg, aes(x= ratio, y=speaker)) +
+  geom_point(size = 3, col = "cadetblue4") +
+  labs(title = "Characters according to their positive/negative words ratio",
+       xlab = "Ratio positive to negative words using Bing lexicon",
+       ylab = "Character")
+
+```
+

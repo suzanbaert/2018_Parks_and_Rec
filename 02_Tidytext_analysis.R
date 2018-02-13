@@ -5,17 +5,18 @@ library(tidytext)
 #clean_script <- readRDS("data/clean_script.RDS")
 script <- readRDS("data/script.RDS")
 
-Encoding(script$text) <- "windows-1252"
+scripts <- script
+Encoding(scripts$text) <- "windows-1252"
 
 
 #changing all curly aposthropes into straight ones, this doesn't work though
-extra_stopwords <- tibble(word = c("iâ", "â", "youâ", "donâ", "thatâ",
+extra_stopwords <- tibble(word = c("hey", "yeah", "iâ", "â", "youâ", "donâ", "thatâ",
                                    "heâ", "weâ", "letâ", "itâ", "ll",
                                    "canâ", "thereâ", "ve", "whatâ",
-                                   "sheâ", "didnâ", "wasnâ", "hey", "yeah"))
+                                   "sheâ", "didnâ", "wasnâ"))
 
 #unnest tokens
-tidy_script <- script %>%
+tidy_script <- scripts %>%
   unnest_tokens(word, text) %>%
   anti_join(stop_words, by="word") %>%
   anti_join(extra_stopwords, by="word") %>% 
@@ -28,10 +29,11 @@ tidy_script %>%
   group_by(episode) %>% 
   top_n(10) %>% 
   ungroup() %>% 
-  mutate(word = reorder(word, n)) %>% 
+  mutate(word = reorder_within(word, n, episode)) %>% 
   ggplot(aes(x = word, y = n, fill = episode))+
-  geom_col() + 
+  geom_col(show.legend = FALSE) + 
   facet_wrap(~episode, scales = "free_y") +
+  scale_x_reordered() +
   coord_flip()
 
 
@@ -50,7 +52,9 @@ tidy_script %>%
 
 
 
-###♥ AFINN
+
+#not use 
+### AFINN
 script %>%
   unnest_tokens(word, text) %>% 
   inner_join(get_sentiments("bing")) %>% 
@@ -65,23 +69,6 @@ script %>%
   facet_wrap(~ sentiment, scales="free_y")+
   coord_flip()
 
-
-
-### AFINN LESLIE
-script %>%
-  filter(speaker == "LESLIE") %>% 
-  unnest_tokens(word, text) %>% 
-  inner_join(get_sentiments("bing")) %>% 
-  count(word, sentiment, sort = TRUE) %>%
-  group_by(sentiment) %>%
-  top_n(10) %>%
-  ungroup() %>% 
-  mutate(word = reorder(word, n)) %>% 
-  ungroup() %>% 
-  ggplot(aes(x=word, y=n, fill=sentiment)) +
-  geom_col() +
-  facet_wrap(~ sentiment, scales="free_y")+
-  coord_flip()
 
 
 
@@ -100,21 +87,6 @@ script %>%
   facet_wrap(~ sentiment, scales="free_y")+
   coord_flip()
 
-
-### ALL NRC
-script %>%
-  unnest_tokens(word, text) %>% 
-  inner_join(get_sentiments("nrc")) %>% 
-  count(word, sentiment, sort = TRUE) %>%
-  group_by(sentiment) %>%
-  top_n(10) %>%
-  ungroup() %>% 
-  mutate(word = reorder(word, n)) %>% 
-  ungroup() %>% 
-  ggplot(aes(x=word, y=n, fill=sentiment)) +
-  geom_col() +
-  facet_wrap(~ sentiment, scales="free_y")+
-  coord_flip()
 
 
 reorder_within <- function(x, by, within, fun = mean, sep = "___", ...) {
@@ -173,11 +145,21 @@ total_words_by_speaker <- tidy_script %>%
 
 
 
-tidy_script %>%
-  filter(speaker %in% c("LESLIE", "TOM", "ANN", "RON", "APRIL", "BEN", "ANDY")) %>%
-  group_by(speaker) %>% 
+#speakers 
+ratio_posneg <- script %>%
+  unnest_tokens(word, text) %>% 
   inner_join(get_sentiments("bing"), by="word") %>% 
-  group_by(speaker, sentiment) %>% 
-  left_join(total_words_by_speaker, by="speaker") %>% 
-  count(speaker, word, sentiment, total, sort=TRUE)
+  count(speaker, sentiment, sort=TRUE) %>% 
+  spread(sentiment, n) %>% 
+  mutate(total = positive + negative, ratio = positive/negative) %>% 
+  filter(total > 12, speaker != "GREG") %>% 
+  mutate(speaker = reorder(speaker, ratio))
+
+ggplot(ratio_posneg, aes(x= ratio, y=speaker)) +
+  geom_point(size = 3, col = "cadetblue4") +
+  labs(title = "Characters according to their positive/negative words ratio",
+       xlab = "Ratio positive to negative words using Bing lexicon",
+       ylab = "Character")
+  
+
 
